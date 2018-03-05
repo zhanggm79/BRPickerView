@@ -75,7 +75,7 @@
         cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
     }
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.textLabel.font = [UIFont systemFontOfSize:16.0f];
+    cell.textLabel.font = [UIFont systemFontOfSize:16.0f * kScaleFit];
     cell.textLabel.textColor = RGB_HEX(0x464646, 1.0f);
     NSString *title = [self.titleArr objectAtIndex:indexPath.row];
     if ([title hasPrefix:@"* "]) {
@@ -83,7 +83,7 @@
         [textStr addAttribute:NSForegroundColorAttributeName value:[UIColor redColor] range:[[textStr string]rangeOfString:@"* "]];
         cell.textLabel.attributedText = textStr;
     } else {
-        cell.textLabel.text = [self.titleArr objectAtIndex:indexPath.row];
+        cell.textLabel.text = title;
     }
     
     switch (indexPath.row) {
@@ -150,7 +150,7 @@
 - (BRTextField *)getTextField:(UITableViewCell *)cell {
     BRTextField *textField = [[BRTextField alloc]initWithFrame:CGRectMake(SCREEN_WIDTH - 230, 0, 200, 50)];
     textField.backgroundColor = [UIColor clearColor];
-    textField.font = [UIFont systemFontOfSize:16.0f];
+    textField.font = [UIFont systemFontOfSize:16.0f * kScaleFit];
     textField.textAlignment = NSTextAlignmentRight;
     textField.textColor = RGB_HEX(0x666666, 1.0);
     textField.delegate = self;
@@ -175,7 +175,7 @@
         _genderTF.placeholder = @"请选择";
         __weak typeof(self) weakSelf = self;
         _genderTF.tapAcitonBlock = ^{
-            [BRStringPickerView showStringPickerWithTitle:@"宝宝性别" dataSource:@[@"男", @"女", @"其他"] defaultSelValue:@"男" isAutoSelect:YES resultBlock:^(id selectValue) {
+            [BRStringPickerView showStringPickerWithTitle:@"宝宝性别" dataSource:@[@"男", @"女", @"其他"] defaultSelValue:weakSelf.genderTF.text resultBlock:^(id selectValue) {
                 weakSelf.genderTF.text = selectValue;
             }];
         };
@@ -189,8 +189,10 @@
         _birthdayTF.placeholder = @"请选择";
         __weak typeof(self) weakSelf = self;
         _birthdayTF.tapAcitonBlock = ^{
-            [BRDatePickerView showDatePickerWithTitle:@"出生年月" dateType:UIDatePickerModeDate defaultSelValue:weakSelf.birthdayTF.text minDateStr:@"" maxDateStr:[NSDate currentDateString] isAutoSelect:YES resultBlock:^(NSString *selectValue) {
+            [BRDatePickerView showDatePickerWithTitle:@"出生日期" dateType:UIDatePickerModeDate defaultSelValue:weakSelf.birthdayTF.text minDateStr:nil maxDateStr:[NSDate currentDateString] isAutoSelect:YES themeColor:nil resultBlock:^(NSString *selectValue) {
                 weakSelf.birthdayTF.text = selectValue;
+            } cancelBlock:^{
+                NSLog(@"点击了背景或取消按钮");
             }];
         };
     }
@@ -203,7 +205,7 @@
         _birthtimeTF.placeholder = @"请选择";
         __weak typeof(self) weakSelf = self;
         _birthtimeTF.tapAcitonBlock = ^{
-            [BRDatePickerView showDatePickerWithTitle:@"出生时刻" dateType:UIDatePickerModeTime defaultSelValue:weakSelf.birthtimeTF.text minDateStr:@"" maxDateStr:@"" isAutoSelect:YES resultBlock:^(NSString *selectValue) {
+            [BRDatePickerView showDatePickerWithTitle:@"出生时刻" dateType:UIDatePickerModeTime defaultSelValue:weakSelf.birthtimeTF.text minDateStr:@"" maxDateStr:@"" isAutoSelect:YES themeColor:[UIColor orangeColor] resultBlock:^(NSString *selectValue) {
                 weakSelf.birthtimeTF.text = selectValue;
             }];
         };
@@ -228,11 +230,26 @@
         _addressTF.placeholder = @"请选择";
         __weak typeof(self) weakSelf = self;
         _addressTF.tapAcitonBlock = ^{
-            [BRAddressPickerView showAddressPickerWithDefaultSelected:@[@10, @0, @3] isAutoSelect:YES resultBlock:^(NSArray *selectAddressArr) {
-                weakSelf.addressTF.text = [NSString stringWithFormat:@"%@%@%@", selectAddressArr[0], selectAddressArr[1], selectAddressArr[2]];
+            // 【转换】：以@" "自字符串为基准将字符串分离成数组，如：@"浙江省 杭州市 西湖区" ——》@[@"浙江省", @"杭州市", @"西湖区"]
+            NSArray *defaultSelArr = [weakSelf.addressTF.text componentsSeparatedByString:@" "];
+            //NSArray *dataSource = [weakSelf getAddressDataSource];  //从外部传入地区数据源
+            NSArray *dataSource = nil; // dataSource 为空时，就默认使用框架内部提供的数据源（即 BRCity.plist）
+            [BRAddressPickerView showAddressPickerWithShowType:BRAddressPickerModeArea dataSource:dataSource defaultSelected:defaultSelArr isAutoSelect:YES themeColor:nil resultBlock:^(NSArray *selectAddressArr) {
+                weakSelf.addressTF.text = [NSString stringWithFormat:@"%@ %@ %@", selectAddressArr[0], selectAddressArr[1], selectAddressArr[2]];
+            } cancelBlock:^{
+                NSLog(@"点击了背景视图或取消按钮");
             }];
         };
     }
+}
+#pragma mark - 获取地区数据源
+- (NSArray *)getAddressDataSource {
+    // 加载地区数据源（实际开发中这里可以写网络请求，从服务端请求数据。可以把 BRCity.json 文件的数据放到服务端去维护，通过接口获取这个数据源数组）
+    NSString *filePath = [[NSBundle mainBundle] pathForResource:@"BRCity.json" ofType:nil];
+    NSData *data = [NSData dataWithContentsOfFile:filePath];
+    NSArray *dataSource = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:nil];
+    
+    return dataSource;
 }
 
 #pragma mark - 学历 textField
@@ -242,8 +259,12 @@
         _educationTF.placeholder = @"请选择";
         __weak typeof(self) weakSelf = self;
         _educationTF.tapAcitonBlock = ^{
-            [BRStringPickerView showStringPickerWithTitle:@"学历" dataSource:@[@"大专以下", @"大专", @"本科", @"硕士", @"博士", @"博士后"] defaultSelValue:@"本科" isAutoSelect:YES resultBlock:^(id selectValue) {
+            //NSArray *dataSource = @[@"大专以下", @"大专", @"本科", @"硕士", @"博士", @"博士后"];
+            NSString *dataSource = @"testData1.plist"; // 可以将数据源（上面的数组）放到plist文件中
+            [BRStringPickerView showStringPickerWithTitle:@"学历" dataSource:dataSource defaultSelValue:weakSelf.educationTF.text isAutoSelect:YES themeColor:nil resultBlock:^(id selectValue) {
                 weakSelf.educationTF.text = selectValue;
+            } cancelBlock:^{
+                NSLog(@"点击了背景视图或取消按钮");
             }];
         };
     }
@@ -256,9 +277,13 @@
         _otherTF.placeholder = @"请选择";
         __weak typeof(self) weakSelf = self;
         _otherTF.tapAcitonBlock = ^{
-            NSArray *dataSources = @[@[@"第1周", @"第2周", @"第3周", @"第4周", @"第5周", @"第6周", @"第7周"], @[@"第1天", @"第2天", @"第3天", @"第4天", @"第5天", @"第6天", @"第7天"]];
-            [BRStringPickerView showStringPickerWithTitle:@"自定义多列字符串" dataSource:dataSources defaultSelValue:@[@"第3周", @"第3天"] isAutoSelect:YES resultBlock:^(id selectValue) {
+            NSArray *dataSource = @[@[@"第1周", @"第2周", @"第3周", @"第4周", @"第5周", @"第6周", @"第7周"], @[@"第1天", @"第2天", @"第3天", @"第4天", @"第5天", @"第6天", @"第7天"]];
+            //NSString *dataSource = @"testData3.plist"; // 可以将数据源（上面的数组）放到plist文件中
+            NSArray *defaultSelArr = [weakSelf.otherTF.text componentsSeparatedByString:@"，"];
+            [BRStringPickerView showStringPickerWithTitle:@"自定义多列字符串" dataSource:dataSource defaultSelValue:defaultSelArr isAutoSelect:YES themeColor:RGB_HEX(0xff7998, 1.0f) resultBlock:^(id selectValue) {
                 weakSelf.otherTF.text = [NSString stringWithFormat:@"%@，%@", selectValue[0], selectValue[1]];
+            } cancelBlock:^{
+                NSLog(@"点击了背景视图或取消按钮");
             }];
         };
     }
